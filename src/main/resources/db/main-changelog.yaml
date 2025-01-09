@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: './2024/11/13-01-create.sql'
+      relativeToChangelogFile: true
