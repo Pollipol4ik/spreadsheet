@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: 'jdbc:postgresql://localhost:15432/spreadsheet'
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    properties:
+      hibernate:
+        dialect: 'org.hibernate.dialect.PostgreSQLDialect'
+        format_sql: true
+        hbm2ddl:
+          auto: update
+  liquibase:
+    change-log: classpath:db/main-changelog.yaml
