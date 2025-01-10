@@ -25,8 +25,16 @@ public class Cell {
     private int col;
     private String value;
 
+    private String alignment = "left";
+    private String backgroundColor = "#ffffff";
+
     @ManyToOne
     @JoinColumn(name = "sheet_id", nullable = false)
     private Sheet sheet;
+
+    public boolean isFormula() {
+        return value != null && value.startsWith("=");
+    }
+
 }
 

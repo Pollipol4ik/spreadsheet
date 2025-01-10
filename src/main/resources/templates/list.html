@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,13 +7,16 @@
 </head>
 <body>
 <h1>Sheets</h1>
+
 <form action="/sheets" method="post">
     <input type="text" name="name" placeholder="Enter sheet name">
     <button type="submit">Create Sheet</button>
 </form>
+
 <ul>
     <li th:each="sheet : ${sheets}">
         <span th:text="${sheet.name}"></span>
+        <a th:href="@{/sheets/{id}(id=${sheet.id})}">Open</a>
         <a th:href="@{/sheets/{id}/export(id=${sheet.id})}">Export to XLSX</a>
         <form th:action="@{/sheets/{id}/import(id=${sheet.id})}" method="post" enctype="multipart/form-data" style="display: inline;">
             <input type="file" name="file">

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="'Sheet: ' + ${sheet.name}">Sheet</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        td, th {
+            border: 1px solid #ccc;
+            padding: 8px;
+        }
+
+        input {
+            width: 100%;
+            border: none;
+            text-align: inherit;
+            background-color: inherit;
+        }
+
+        .controls {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+<h1 th:text="'Sheet: ' + ${sheet.name}"></h1>
+
+<div class="controls">
+    <form th:action="@{/sheets/{id}/addRow(id=${sheet.id})}" method="post">
+        <button type="submit">Add Row</button>
+    </form>
+    <form th:action="@{/sheets/{id}/addColumn(id=${sheet.id})}" method="post">
+        <button type="submit">Add Column</button>
+    </form>
+</div>
+
+<table>
+    <thead>
+    <tr>
+        <th></th> <!-- Пустая ячейка для первого столбца (буквы столбцов) -->
+        <th th:each="col : ${#numbers.sequence(0, maxCol)}"
+            th:text="${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[col]}"> <!-- Буквы столбцов -->
+        </th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="row : ${#numbers.sequence(0, maxRow)}">
+        <th th:text="${row + 1}"></th> <!-- Нумерация строк -->
+        <td th:each="col : ${#numbers.sequence(0, maxCol)}"
+            th:with="cell=null">
+                <span th:each="c : ${cells}" th:if="${c.row == row && c.col == col}"
+                      th:with="cell=c">
+                </span>
+            <span th:if="${cell != null}">
+                    <input type="text"
+                           th:value="${cell.value ?: ''}"
+                           th:data-row="${row}" th:data-col="${col}"
+                           th:style="'text-align:' + ${cell.alignment ?: 'left'} +
+                                    '; background-color:' + ${cell.backgroundColor ?: '#ffffff'}"
+                           class="cell-input">
+                </span>
+            <span th:if="${cell == null}">
+                    <input type="text"
+                           th:value="''"
+                           th:data-row="${row}" th:data-col="${col}"
+                           th:style="'text-align:left; background-color:#ffffff'"
+                           class="cell-input">
+                </span>
+        </td>
+    </tr>
+    </tbody>
+</table>
+
+<button id="saveButton">Save</button>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const cells = {}; // Храним значения ячеек в объекте
+
+        // Заполнение значений ячеек
+        document.querySelectorAll('.cell-input').forEach(input => {
+            const row = input.dataset.row;
+            const col = input.dataset.col;
+
+            // Инициализируем значение ячейки
+            cells[`${row}-${col}`] = input.value;
+
+            input.addEventListener('click', function() {
+                this.select();  // Выделить текст при клике
+            });
+
+            input.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();  // Предотвратить переход на новую строку в input
+                    const value = this.value;
+
+                    // Если значение начинается с '=', это формула
+                    if (value.startsWith('=')) {
+                        const formula = value.substring(1); // Убираем знак "="
+                        const evaluatedValue = evaluateFormula(formula, row, col);
+                        this.value = evaluatedValue;  // Отобразить вычисленное значение
+                        cells[`${row}-${col}`] = evaluatedValue;  // Сохранить в объект
+                    } else {
+                        cells[`${row}-${col}`] = value;  // Просто сохраняем значение
+                    }
+
+                    // Отправляем данные на сервер для сохранения
+                    saveCellData(row, col, this.value);
+                }
+            });
+
+            input.addEventListener('focus', function() {
+                // Добавление ссылки на ячейку при клике
+                if (this.value.startsWith("=")) return; // Не добавлять, если уже формула
+                const cellRef = getCellReference(row, col);
+                this.value += cellRef;  // Добавляем ссылку на ячейку в конец формулы
+            });
+        });
+
+        // Сохранение всех ячеек
+        document.getElementById('saveButton').addEventListener('click', () => {
+            const cellData = Object.keys(cells).map(key => {
+                const [row, col] = key.split('-');
+                return { row, column: col, value: cells[key] };
+            });
+
+            fetch(`/sheets/${document.body.dataset.sheetId}/save`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(cellData)
+            }).then(response => {
+                if (response.ok) {
+                    alert('Data saved!');
+                } else {
+                    alert('Error saving data.');
+                }
+            });
+        });
+
+        // Функция для вычисления значения формулы
+        function evaluateFormula(formula, row, col) {
+            // Пример обработки формулы для замены ссылок на ячейки
+            const regex = /([A-Z]+[0-9]+)/g;
+            let match;
+            while ((match = regex.exec(formula)) !== null) {
+                const cellRef = match[0];  // Ссылка на ячейку (например, A1)
+                const cellValue = cells[cellRef] || '0';  // Получаем значение ячейки или 0
+                formula = formula.replace(cellRef, cellValue);  // Заменяем на значение
+            }
+
+            try {
+                // Преобразуем строку в число и выполняем вычисления
+                const result = eval(formula);  // Вычисляем результат формулы
+                return result === undefined ? 'ERROR' : result;  // Возвращаем результат или 'ERROR' если ошибка
+            } catch (e) {
+                return 'ERROR';  // Если ошибка, выводим ERROR
+            }
+        }
+
+        // Функция для сохранения данных ячейки
+        function saveCellData(row, col, value) {
+            fetch(`/sheets/${document.body.dataset.sheetId}/save`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify([{
+                    row: row,
+                    column: col,
+                    value: value
+                }])
+            }).then(response => {
+                if (response.ok) {
+                    console.log('Cell data saved!');
+                } else {
+                    console.log('Error saving cell data.');
+                }
+            });
+        }
+
+        // Функция для получения ссылки на ячейку
+        function getCellReference(row, col) {
+            const colChar = String.fromCharCode(65 + col); // Преобразование числа в букву
+            return `${colChar}${parseInt(row) + 1}`;  // Возвращаем ссылку на ячейку, например, "A1"
+        }
+    });
+</script>
+</body>
+</html>
